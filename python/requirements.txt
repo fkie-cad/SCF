@@ -1,0 +1,5 @@
+# requirements.txt
+colorama==0.4.6
+colorlog==6.10.1
+impacket==0.13.0
+scapy==2.6.1

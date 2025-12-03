@@ -1,0 +1,12 @@
+Ground Truth: smbclient-example.pcapng
+Application: smbclient
+Total File Operations: 8
+Operations performed:
+  - 1 directory creation
+  - 1 file upload
+  - 1 file read
+  - 1 directory listing
+  - 1 failed directory deletion (not empty)
+  - 1 file rename
+  - 1 file deletion
+  - 1 directory deletion
