@@ -4,7 +4,6 @@ import traceback
 import logging
 from utils.helper import timestamp_to_human_readable
 from parsers.signature_parser import *
-from config.settings import EVALUATE_FILE_PATH
 import csv
 import inspect
 from parsers import signature_parser
@@ -122,17 +121,18 @@ def load_rules(filepath):
         return None
 
 
-def analyze_smb_commands(smb_commands, smb_rules):
+def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
     """
     Analyzes a sequence of SMB commands against the loaded ruleset.
-    
+
     This function matches SMB command sequences against predefined patterns (rules),
     allowing for skipped commands within limits, and reconstructs high-level operations.
-    
+
     Args:
         smb_commands: List of SMB command objects extracted from PCAP
         smb_rules: Dictionary of rules grouped by trigger hash
-        
+        output_file: Optional file path to write results (if None, only prints to terminal)
+
     Returns:
         Tuple of (reconstructed_commands, matched_rules) lists
     """
@@ -144,9 +144,10 @@ def analyze_smb_commands(smb_commands, smb_rules):
         logger.error("SMB Rules could not be loaded. Aborting analysis.")
         return [], []
 
-    # Clear any existing evaluation output file to start fresh
-    if os.path.exists(EVALUATE_FILE_PATH):
-        os.remove(EVALUATE_FILE_PATH)
+    # If output file specified, clear it at start
+    if output_file:
+        with open(output_file, 'w') as f:
+            pass  # Creates/clears the file
 
     # Log a preview of the raw extracted commands for debugging
     logger.debug("--- Raw SMB Commands Extracted (first 10) ---")
@@ -331,9 +332,13 @@ def analyze_smb_commands(smb_commands, smb_rules):
 
                 logger.debug_green(f"[{ip_src}] {info}")
 
-                # Write the reconstructed command to the evaluation log file
-                with open(EVALUATE_FILE_PATH, 'a') as f:
-                    f.write(f"{timestamp_human} {ip_src} {clean_info}\n")
+                # Print to terminal (with colors from info)
+                print(f"{timestamp_human} {ip_src} {info}")
+
+                # Write to file only if specified (use clean_info without ANSI codes)
+                if output_file:
+                    with open(output_file, 'a') as f:
+                        f.write(f"{timestamp_human} {ip_src} {clean_info}\n")
 
                 # Advance the index past all commands that were part of this match
                 index += len(final_candidate['signature']) + final_candidate['skipped']

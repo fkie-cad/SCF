@@ -31,9 +31,15 @@ pip install -r requirements.txt
 python main.py /path/to/capture.pcap /path/to/rules.tsv
 ```
 
+Save output to file:
+```
+python main.py /path/to/capture.pcap /path/to/rules.tsv -o output.txt
+```
+
 Hash-only mode (outputs command hashes without pattern matching):
 ```
 python main.py /path/to/capture.pcap --hash-only
+python main.py /path/to/capture.pcap --hash-only -o hashes.txt
 ```
 
 
@@ -42,7 +48,6 @@ python main.py /path/to/capture.pcap --hash-only
 
 ```
 ├── main.py                     # Main executable script
-├── reconstructed_commands.txt  # Output file with results
 ├── requirements.txt            # Python package dependencies
 ├── analysis/                   # Analysis-related modules
 ├── config/                     # Configuration files
@@ -55,21 +60,22 @@ python main.py /path/to/capture.pcap --hash-only
 
 ##### Output
 
-- **Standard mode**: Results are written to `reconstructed_commands.txt`
+Results are printed to the terminal by default. Use `-o <filename>` to also write to a file.
 
-    Example entry:
+- **Standard mode**: Reconstructed commands with colored output
 
-    | Timestamp | Source IP | Application | Description | Filename/Path |
-    |---|---|---|---|---|
-    | 2025-11-27 21:36:20 | 192.168.206.62 | smbclient | Creation of directory | testdir |
+    Example:
+    ```
+    2025-11-27 21:36:20.615 192.168.206.62 [smbclient] Creation of directory testdir
+    ```
 
-- **Hash-only mode**: Hashes are written to `smb_hashes.txt`
+- **Hash-only mode**: Command hashes in tab-separated format
 
-    Example entry:
-
-    | Packet Number | Command | Request Type | Hash |
-    |---|---|---|---|
-    | 1 | CREATE | REQUEST | a1b2c3d4e5f6... |
+    Example:
+    ```
+    packet_num	command	request_type	hash
+    2	CREATE	REQUEST	e26ab3635920a9977c21009a4edf8f01
+    ```
 
 ---
 ## zeek/
