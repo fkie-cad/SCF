@@ -219,6 +219,9 @@ def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
                 candidate_rule_copy["enc_conversion_lengths"] = [enc_conversion_length]
                 candidate_rule_copy["enc_time_stamps"] = [command.timestamp]
 
+                # Track the last matched command index (starts with trigger command at current index)
+                last_matched_index = index
+
                 # Try to match the rest of the signature against future commands
                 for j, signature_hash_expected in enumerate(signature):
                     signature_found = False
@@ -261,9 +264,10 @@ def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
                             # This command doesn't match, try skipping it
                             skipped += 1
                         else:
-                            # Found a match! Add to sequence and move to next signature part
+                            # Found a match! Add to sequence and track the index
                             signature_found = True
                             commands_in_sequence.append(future_command)
+                            last_matched_index = future_command_index
                             break
 
                     # If we couldn't find this signature part, the rule doesn't match
@@ -272,7 +276,16 @@ def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
                         logger.debug_red(f"      Signature hash '{signature_hash_expected}' not found. Not okay.")
                         break
 
-                # If the entire signature matched, try to parse the command sequence
+                # If the entire signature matched, check if any commands are already assigned
+                if candidate_okay:
+                    # Reject if any command in the sequence was already matched by another rule
+                    for cmd in commands_in_sequence:
+                        if cmd.is_assigned():
+                            candidate_okay = False
+                            logger.debug_red(f"    Command in sequence already assigned. Rejecting candidate.")
+                            break
+
+                # If still okay, try to parse the command sequence
                 if candidate_okay:
                     logger.debug_green(f"    Rule '{candidate_rule_copy['description']}' signature matched! Parsing...")
                     info = None
@@ -298,6 +311,8 @@ def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
                         # Store the parsed information and add to candidates list
                         candidate_rule_copy["info"] = info
                         candidate_rule_copy["skipped"] = skipped
+                        candidate_rule_copy["commands_in_sequence"] = commands_in_sequence
+                        candidate_rule_copy["last_matched_index"] = last_matched_index
                         possible_candidates.append(candidate_rule_copy)
                         logger.debug(f"    Rule '{candidate_rule_copy['description']}' added to possible_candidates.")
 
@@ -340,8 +355,16 @@ def analyze_smb_commands(smb_commands, smb_rules, output_file=None):
                     with open(output_file, 'a') as f:
                         f.write(f"{timestamp_human} {ip_src} {clean_info}\n")
 
-                # Advance the index past all commands that were part of this match
-                index += len(final_candidate['signature']) + final_candidate['skipped']
+                # Mark all commands in the matched sequence as assigned
+                # This prevents them from being re-matched by other rules
+                for matched_cmd in final_candidate.get('commands_in_sequence', []):
+                    matched_cmd.set_assigned(True)
+
+                # Only advance by 1 - the is_assigned() check will skip matched commands
+                # This allows trigger hashes that appear between matched commands to be evaluated
+                # (e.g., view file triggers that appear within a list directory operation)
+                # Duplicates are prevented by checking if commands_in_sequence overlap with assigned commands
+                index += 1
             else:
                 # No valid candidate found, move to next command
                 index += 1

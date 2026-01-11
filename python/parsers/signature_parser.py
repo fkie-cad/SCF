@@ -24,21 +24,62 @@ def signature_parsing_cmd_cd(data):
             colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
             return f"Changed directory (cd) to {colored_filename}"
     return "Changed directory (cd)"
-
 def signature_parsing_cmd_dir(data):
-    for command in reversed(data):
-        if command.get_filename() != None:
-            filename = normalize_path(command.get_filename())
-            colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
-            return f"[cmd] Listing contents of directory {colored_filename}"
-    return "[cmd] Listing contents of directory"
-
-def signature_parsing_cmd_dir_compound(data):
+    # First pass: try to find a filename that is NOT a share root or wildcard
+    # Share roots end with a trailing slash after the share name (e.g., //server/share/)
+    # Wildcards are patterns like "*" from QUERY_DIRECTORY commands
     for command in data:
         if command.get_filename() != None:
             filename = normalize_path(command.get_filename())
+            # Skip if this is a share root (ends with single trailing slash)
+            # Pattern: //server/share/ should be skipped
+            if filename.endswith('/') and filename.count('/') == 4:
+                continue
+            # Skip wildcard patterns (*, *.*, etc.)
+            if '*' in filename or '?' in filename:
+                continue
+            colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
+            return f"[cmd] Listing contents of directory {colored_filename}"
+
+    # Second pass: if we only found share roots/wildcards, use share roots (fallback)
+    for command in data:
+        if command.get_filename() != None:
+            filename = normalize_path(command.get_filename())
+            # Skip wildcards in fallback too
+            if '*' in filename or '?' in filename:
+                continue
+            colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
+            return f"[cmd] Listing contents of directory {colored_filename}"
+
+    return "[cmd] Listing contents of directory"
+
+def signature_parsing_cmd_dir_compound(data):
+    # First pass: try to find a filename that is NOT a share root or wildcard
+    # Share roots end with a trailing slash after the share name (e.g., //server/share/)
+    # Wildcards are patterns like "*" from QUERY_DIRECTORY commands
+    for command in data:
+        if command.get_filename() != None:
+            filename = normalize_path(command.get_filename())
+            # Skip if this is a share root (ends with single trailing slash)
+            # Pattern: //server/share/ should be skipped
+            if filename.endswith('/') and filename.count('/') == 4:
+                continue
+            # Skip wildcard patterns (*, *.*, etc.)
+            if '*' in filename or '?' in filename:
+                continue
             colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
             return f"[cmd] Listing of directory {colored_filename}"
+
+    # Second pass: if we only found share roots/wildcards, use share roots (fallback)
+    for command in data:
+        if command.get_filename() != None:
+            filename = normalize_path(command.get_filename())
+            # Skip wildcards in fallback too
+            if '*' in filename or '?' in filename:
+                continue
+            colored_filename = f"{Fore.RED}{filename}{Style.RESET_ALL}"
+            return f"[cmd] Listing of directory {colored_filename}"
+
     return "[cmd] Listing of directory"
 
 def signature_parsing_cmd_mkdir(data):
@@ -133,9 +174,12 @@ def signature_parsing_ps_move_directory(data):
             new_dir_path = data.FileName
             share_path = command.get_share_path()
             # Normalize both paths before joining
-            share_path = normalize_path(share_path)
-            new_dir_path = normalize_path(new_dir_path)
-            new_dir_path = share_path + '/' + new_dir_path
+            if share_path:    
+                share_path = normalize_path(share_path)
+                new_dir_path = normalize_path(new_dir_path)
+                new_dir_path = share_path + '/' + new_dir_path
+            else: 
+                new_dir_path = normalize_path(new_dir_path)
 
     if old_dir_path and new_dir_path:
         old_base_path = '/'.join(old_dir_path.split('/')[:-1])
@@ -204,9 +248,10 @@ def signature_parsing_cmd_move_directory(data):
             new_dir_path = data.FileName
             share_path = command.get_share_path()
             # Normalize both paths before joining
-            share_path = normalize_path(share_path)
             new_dir_path = normalize_path(new_dir_path)
-            new_dir_path = share_path + '/' + new_dir_path
+            if share_path:
+                share_path = normalize_path(share_path)
+                new_dir_path = share_path + '/' + new_dir_path
 
     if old_dir_path and new_dir_path:
         old_base_path = '/'.join(old_dir_path.split('/')[:-1])

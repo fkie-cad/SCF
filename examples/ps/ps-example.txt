@@ -1,0 +1,11 @@
+Ground Truth: ps-example.pcapng
+Application: PowerShell
+Total File Operations: 7
+Operations performed:
+  - 1 directory creation
+  - 1 file upload
+  - 1 file read
+  - 1 directory listing
+  - 1 file rename
+  - 1 file deletion
+  - 1 directory deletion
