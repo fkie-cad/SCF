@@ -92,7 +92,10 @@ class SMBCommand:
     
     def is_assigned(self):
         return self.assigned
-    
+
+    def set_assigned(self, value):
+        self.assigned = value
+
     def get_filename(self):
         return None
     
