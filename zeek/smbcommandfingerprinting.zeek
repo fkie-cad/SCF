@@ -946,11 +946,11 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
     local setinfo_filename = "";
 
     debug_print(fmt("[FILENAME] Using hash filter with %d hashes", |filename_hashes|));
-    
+
     for (idx_pos in matched_indices) {
         local cmd_idx = matched_indices[idx_pos];
         local cmd = state$commands[cmd_idx];
-        
+
         # CREATE Requests
         if (cmd$command == "CREATE" && !cmd$is_response && cmd?$filename) {
             if (cmd$hash in filename_hashes) {
@@ -962,7 +962,7 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
                 debug_print(fmt("[FILENAME] Skipping CREATE (hash %s not in filter)", cmd$hash));
             }
         }
-        
+
         # SET_INFO Requests
         if (cmd$command == "SET_INFO" && !cmd$is_response && cmd?$filename) {
             if (cmd$hash in filename_hashes) {
@@ -970,6 +970,25 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
                 debug_print(fmt("[FILENAME] Found SET_INFO filename: '%s' (hash: %s)", cmd$filename, cmd$hash));
             } else {
                 debug_print(fmt("[FILENAME] Skipping SET_INFO (hash %s not in filter)", cmd$hash));
+            }
+        }
+
+        # COMPOUND Commands - check if any individual hash matches the filter
+        if (cmd$is_compound && !cmd$is_response && cmd?$filename && cmd?$individual_hashes) {
+            local hash_matched = F;
+            for (hash_idx in cmd$individual_hashes) {
+                if (cmd$individual_hashes[hash_idx] in filename_hashes) {
+                    hash_matched = T;
+                    break;
+                }
+            }
+            if (hash_matched) {
+                if (create_filename == "") {
+                    create_filename = cmd$filename;
+                    debug_print(fmt("[FILENAME] Found COMPOUND filename: '%s' (individual hash matched filter)", cmd$filename));
+                }
+            } else {
+                debug_print(fmt("[FILENAME] Skipping COMPOUND (no individual hash in filter)"));
             }
         }
     }
@@ -988,13 +1007,13 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
 function get_filename_from_match(state: ConnectionState, matched_indices: vector of count): string {
     local create_filename = "";
     local setinfo_filename = "";
-    
-    debug_print("[FILENAME] Using default behavior (all CREATE and SET_INFO)");
-    
+
+    debug_print("[FILENAME] Using default behavior (all CREATE, SET_INFO, and COMPOUND)");
+
     for (idx_pos in matched_indices) {
         local cmd_idx = matched_indices[idx_pos];
         local cmd = state$commands[cmd_idx];
-        
+
         # CREATE Requests
         if (cmd$command == "CREATE" && !cmd$is_response && cmd?$filename) {
             if (create_filename == "") {
@@ -1002,14 +1021,22 @@ function get_filename_from_match(state: ConnectionState, matched_indices: vector
                 debug_print(fmt("[FILENAME] Found CREATE filename: '%s' (default)", cmd$filename));
             }
         }
-        
+
         # SET_INFO Requests
         if (cmd$command == "SET_INFO" && !cmd$is_response && cmd?$filename) {
             setinfo_filename = cmd$filename;
             debug_print(fmt("[FILENAME] Found SET_INFO filename: '%s' (default)", cmd$filename));
         }
+
+        # COMPOUND Commands - extract filename if available
+        if (cmd$is_compound && !cmd$is_response && cmd?$filename) {
+            if (create_filename == "") {
+                create_filename = cmd$filename;
+                debug_print(fmt("[FILENAME] Found COMPOUND filename: '%s' (default)", cmd$filename));
+            }
+        }
     }
-    
+
     if (create_filename != "" && setinfo_filename != "") {
         return fmt("%s -> %s", create_filename, setinfo_filename);
     }
