@@ -289,49 +289,54 @@ const smb2_commands: table[count] of string = {
 # --------------------------------------------
 # -          STATUS (INT -> TEXT)            -
 # --------------------------------------------
+# Status codes aligned with Scapy's STATUS_ERREF + Python's EXTENDED_STATUS_ERREF
+# to ensure identical hash generation between Zeek and Python
 const status_codes: table[count] of string = {
     [0x00000000] = "STATUS_SUCCESS",
+    [0x00000103] = "STATUS_PENDING",
+    [0x0000010B] = "STATUS_NOTIFY_CLEANUP",
+    [0x0000010C] = "STATUS_NOTIFY_ENUM_DIR",
+    [0x00000532] = "ERROR_PASSWORD_EXPIRED",
+    [0x00000533] = "ERROR_ACCOUNT_DISABLED",
+    [0x000006FE] = "ERROR_TRUST_FAILURE",
     [0x80000005] = "STATUS_BUFFER_OVERFLOW",
     [0x80000006] = "STATUS_NO_MORE_FILES",
-    [0xC0000001] = "STATUS_UNSUCCESSFUL",
-    [0xC0000002] = "STATUS_NOT_IMPLEMENTED",
-    [0xC0000008] = "STATUS_INVALID_HANDLE",
-    [0xC0000009] = "STATUS_INVALID_PARAMETER",
+    [0x8000002D] = "STATUS_STOPPED_ON_SYMLINK",
+    [0x8009030C] = "SEC_E_LOGON_DENIED",
+    [0x8009030F] = "SEC_E_MESSAGE_ALTERED",
+    [0x80090310] = "SEC_E_OUT_OF_SEQUENCE",
+    [0xC0000003] = "STATUS_INVALID_INFO_CLASS",
+    [0xC0000004] = "STATUS_INFO_LENGTH_MISMATCH",
     [0xC000000D] = "STATUS_INVALID_PARAMETER",
     [0xC000000F] = "STATUS_NO_SUCH_FILE",
-    [0xC0000010] = "STATUS_INVALID_DEVICE_REQUEST",
-    [0xC0000011] = "STATUS_END_OF_FILE",
-    [0xC0000013] = "STATUS_NO_MEMORY",
     [0xC0000016] = "STATUS_MORE_PROCESSING_REQUIRED",
     [0xC0000022] = "STATUS_ACCESS_DENIED",
-    [0xC0000023] = "STATUS_BUFFER_TOO_SMALL",
     [0xC0000033] = "STATUS_OBJECT_NAME_INVALID",
     [0xC0000034] = "STATUS_OBJECT_NAME_NOT_FOUND",
-    [0xC0000035] = "STATUS_OBJECT_NAME_COLLISION",
-    [0xC0000039] = "STATUS_OBJECT_PATH_INVALID",
-    [0xC000003A] = "STATUS_OBJECT_PATH_NOT_FOUND",
-    [0xC0000041] = "STATUS_OBJECT_PATH_SYNTAX_BAD",
     [0xC0000043] = "STATUS_SHARING_VIOLATION",
-    [0xC0000054] = "STATUS_FILE_LOCK_CONFLICT",
-    [0xC0000055] = "STATUS_LOCK_NOT_GRANTED",
-    [0xC0000056] = "STATUS_DELETE_PENDING",
-    [0xC000007F] = "STATUS_DISK_FULL",
+    [0xC0000061] = "STATUS_PRIVILEGE_NOT_HELD",
+    [0xC0000064] = "STATUS_NO_SUCH_USER",
+    [0xC000006D] = "STATUS_LOGON_FAILURE",
+    [0xC000006E] = "STATUS_ACCOUNT_RESTRICTION",
+    [0xC0000071] = "STATUS_PASSWORD_EXPIRED",
+    [0xC0000072] = "STATUS_ACCOUNT_DISABLED",
+    [0xC000009A] = "STATUS_INSUFFICIENT_RESOURCES",
+    [0xC00000BA] = "STATUS_FILE_IS_A_DIRECTORY",
+    [0xC00000BB] = "STATUS_NOT_SUPPORTED",
+    [0xC00000C9] = "STATUS_NETWORK_NAME_DELETED",
+    [0xC00000CC] = "STATUS_BAD_NETWORK_NAME",
     [0xC0000101] = "STATUS_DIRECTORY_NOT_EMPTY",
-    [0xC0000103] = "STATUS_NOT_A_DIRECTORY",
-    [0xC0000104] = "STATUS_CANCELLED",
-    [0xC0000107] = "STATUS_CANNOT_DELETE",
-    [0xC000011F] = "STATUS_INVALID_INFO_CLASS",
     [0xC0000120] = "STATUS_CANCELLED",
-    [0xC0000121] = "STATUS_CANNOT_DELETE",
-    [0xC0000122] = "STATUS_FILE_DELETED",
-    [0xC0000123] = "STATUS_SPECIAL_ACCOUNT",
+    [0xC0000122] = "STATUS_INVALID_COMPUTER_NAME",
     [0xC0000128] = "STATUS_FILE_CLOSED",
-    [0xC000014B] = "STATUS_PIPE_BROKEN",
-    [0xC0000184] = "STATUS_INVALID_DEVICE_STATE",
+    [0xC000015B] = "STATUS_LOGON_TYPE_NOT_GRANTED",
+    [0xC000018B] = "STATUS_NO_TRUST_SAM_ACCOUNT",
+    [0xC000019C] = "STATUS_FS_DRIVER_REQUIRED",
+    [0xC0000203] = "STATUS_USER_SESSION_DELETED",
+    [0xC000020C] = "STATUS_CONNECTION_DISCONNECTED",
     [0xC0000225] = "STATUS_NOT_FOUND",
     [0xC0000257] = "STATUS_PATH_NOT_COVERED",
-    [0xC0000272] = "STATUS_PASSWORD_EXPIRED",
-    [0xC0000373] = "STATUS_STOPPED_ON_SYMLINK"
+    [0xC000035C] = "STATUS_NETWORK_SESSION_EXPIRED",
 };
 
 # -------------------------------------------------
@@ -853,7 +858,7 @@ function get_status_string(status: count): string {
     if (status in status_codes) {
         return status_codes[status];
     } else {
-        return fmt("UNKNOWN_STATUS_0x%08X", status);
+        return "Unknown status";
     }
 }
 
@@ -954,7 +959,7 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
         # CREATE Requests
         if (cmd$command == "CREATE" && !cmd$is_response && cmd?$filename) {
             if (cmd$hash in filename_hashes) {
-                if (create_filename == "") {
+                if (create_filename == "" || ((create_filename == "/" || create_filename == "(empty or root directory)") && cmd$filename != "/" && cmd$filename != "(empty or root directory)")) {
                     create_filename = cmd$filename;
                     debug_print(fmt("[FILENAME] Found CREATE filename: '%s' (hash: %s)", cmd$filename, cmd$hash));
                 }
@@ -983,7 +988,7 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
                 }
             }
             if (hash_matched) {
-                if (create_filename == "") {
+                if (create_filename == "" || ((create_filename == "/" || create_filename == "(empty or root directory)") && cmd$filename != "/" && cmd$filename != "(empty or root directory)")) {
                     create_filename = cmd$filename;
                     debug_print(fmt("[FILENAME] Found COMPOUND filename: '%s' (individual hash matched filter)", cmd$filename));
                 }
@@ -991,9 +996,6 @@ function get_filename_from_match_filtered(state: ConnectionState, matched_indice
                 debug_print(fmt("[FILENAME] Skipping COMPOUND (no individual hash in filter)"));
             }
         }
-    }
-    if (create_filename != "" && setinfo_filename != "") {
-        return fmt("%s -> %s", create_filename, setinfo_filename);
     }
     if (create_filename != "") {
         return create_filename;
@@ -1016,7 +1018,7 @@ function get_filename_from_match(state: ConnectionState, matched_indices: vector
 
         # CREATE Requests
         if (cmd$command == "CREATE" && !cmd$is_response && cmd?$filename) {
-            if (create_filename == "") {
+            if (create_filename == "" || ((create_filename == "/" || create_filename == "(empty or root directory)") && cmd$filename != "/" && cmd$filename != "(empty or root directory)")) {
                 create_filename = cmd$filename;
                 debug_print(fmt("[FILENAME] Found CREATE filename: '%s' (default)", cmd$filename));
             }
@@ -1030,15 +1032,11 @@ function get_filename_from_match(state: ConnectionState, matched_indices: vector
 
         # COMPOUND Commands - extract filename if available
         if (cmd$is_compound && !cmd$is_response && cmd?$filename) {
-            if (create_filename == "") {
+            if (create_filename == "" || ((create_filename == "/" || create_filename == "(empty or root directory)") && cmd$filename != "/" && cmd$filename != "(empty or root directory)")) {
                 create_filename = cmd$filename;
                 debug_print(fmt("[FILENAME] Found COMPOUND filename: '%s' (default)", cmd$filename));
             }
         }
-    }
-
-    if (create_filename != "" && setinfo_filename != "") {
-        return fmt("%s -> %s", create_filename, setinfo_filename);
     }
 
     if (create_filename != "") {
@@ -1778,7 +1776,7 @@ function commit_match(conn_uid: string, cand: RuleCandidate, state: ConnectionSt
 
     # Get filename
     local filename = "";
-    if (cand?$rule_filename_hashes) {
+    if (cand?$rule_filename_hashes && |cand$rule_filename_hashes| > 0) {
         filename = get_filename_from_match_filtered(state, cand$matched_command_indices, cand$rule_filename_hashes);
     } else {
         filename = get_filename_from_match(state, cand$matched_command_indices);
@@ -2008,13 +2006,8 @@ function process_new_command(conn_uid: string, cmd: SMBCommand, cid: conn_id) {
     if (cmd?$filename)
         debug_print(fmt("Filename: %s", cmd$filename));
     
-    update_active_candidates(conn_uid, cmd_index);
-
-    check_for_matches(conn_uid, cmd_index);
-
-    check_for_new_candidates(conn_uid, cmd_index);
-    
-    debug_print(fmt("Active Candidates: %d", |state$active_candidates|));
+    # Matching is deferred to zeek_done (sequential_match_all)
+    # to replicate Python's sequential forward scan algorithm exactly.
     debug_print("");
 }
 
@@ -2229,52 +2222,24 @@ function process_tcp_packet_original(c: connection, is_orig: bool, flags: string
 
     local parsed_infos = parse_smb_command(payload, is_orig);
 
-    # Check if this is a compound command
+    # For compound commands, only process the first command (matching Python/Scapy behavior)
+    # Scapy's elif chain in parse_smb2_packet only processes one command per packet
     if (|parsed_infos| > 0 && parsed_infos[0]$is_compound_part) {
-        debug_print(fmt("[COMPOUND PROCESSING] Processing compound with %d commands", |parsed_infos|));
+        debug_print(fmt("[COMPOUND PROCESSING] Compound with %d commands - processing only first (Python-compatible)", |parsed_infos|));
 
-        # Collect individual hashes and filenames
-        local individual_hashes: vector of string = vector();
-        local compound_commands: vector of string = vector();
-        local compound_filename = "";
+        local first_info = parsed_infos[0];
 
-        for (comp_idx in parsed_infos) {
-            local comp_info = parsed_infos[comp_idx];
-
-            # Skip commands without hash
-            if (!comp_info?$hash || comp_info$hash == "")
-                next;
-
-            individual_hashes[|individual_hashes|] = comp_info$hash;
-            compound_commands[|compound_commands|] = comp_info$command;
-
-            # Collect filename from any CREATE or SET_INFO in compound
-            if (comp_info?$filename && compound_filename == "") {
-                compound_filename = comp_info$filename;
-            }
-        }
-
-        # Only process if we have valid hashes
-        if (|individual_hashes| > 0) {
-            # Calculate compound hash
-            local compound_hash = create_compound_hash(individual_hashes);
-
-            # Create single SMBCommand for the compound
+        if (first_info?$hash && first_info$hash != "") {
             local comp_cmd: SMBCommand;
             comp_cmd$ts = network_time();
-            comp_cmd$command = fmt("COMPOUND(%s)", join_string_vec(compound_commands, "+"));
-            comp_cmd$hash = compound_hash;
-            comp_cmd$is_compound = T;
-            comp_cmd$individual_hashes = individual_hashes;
-
-            if (compound_filename != "")
-                comp_cmd$filename = compound_filename;
-
+            comp_cmd$command = first_info$command;
+            comp_cmd$hash = first_info$hash;
+            if (first_info?$filename)
+                comp_cmd$filename = first_info$filename;
             comp_cmd$length = len;
             comp_cmd$is_response = !is_orig;
             comp_cmd$assigned = F;
-
-            debug_print(fmt("[COMPOUND PROCESSING] Created compound: %s with hash %s", comp_cmd$command, compound_hash));
+            comp_cmd$is_compound = F;
 
             process_new_command(c$uid, comp_cmd, c$id);
         }
@@ -2338,41 +2303,16 @@ function process_tcp_packet_hash_only(c: connection, is_orig: bool, len: count, 
     # Increment packet counter
     ++packet_counter;
 
-    # Check if this is a compound command
+    # For compound commands, only log the first command (matching Python/Scapy behavior)
     if (|parsed_infos| > 0 && parsed_infos[0]$is_compound_part) {
-        # Collect individual commands and hashes
-        local individual_hashes: vector of string = vector();
-        local compound_commands: vector of string = vector();
+        local first_info = parsed_infos[0];
 
-        for (comp_idx in parsed_infos) {
-            local comp_info = parsed_infos[comp_idx];
-
-            # Skip commands without hash
-            if (!comp_info?$hash || comp_info$hash == "")
-                next;
-
-            individual_hashes[|individual_hashes|] = comp_info$hash;
-            compound_commands[|compound_commands|] = comp_info$command;
-        }
-
-        # Only log if we have valid hashes
-        if (|individual_hashes| > 0) {
-            # Calculate compound hash
-            local compound_hash = create_compound_hash(individual_hashes);
-
-            # Build detail string: (CMD1:hash1, CMD2:hash2, ...)
-            local details: vector of string = vector();
-            for (i in compound_commands) {
-                details[|details|] = fmt("%s:%s", compound_commands[i], individual_hashes[i]);
-            }
-            local detail_str = join_string_vec(details, ", ");
-
-            # Create log entry
+        if (first_info?$hash && first_info$hash != "") {
             local comp_hash_info: SMBHashInfo;
             comp_hash_info$packet_num = packet_counter;
-            comp_hash_info$command = fmt("COMPOUND(%s)", join_string_vec(compound_commands, "+"));
+            comp_hash_info$command = first_info$command;
             comp_hash_info$request_type = is_orig ? "Request" : "Response";
-            comp_hash_info$hash = fmt("%s (%s)", compound_hash, detail_str);
+            comp_hash_info$hash = first_info$hash;
 
             Log::write(SMBCommandFingerprinting::HASH_LOG, comp_hash_info);
         }
@@ -2430,45 +2370,187 @@ event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: c
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║                        ZEEK END FUNCTION                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
-event zeek_done() {
-    # Commit all remaining pending matches before reporting statistics
-    debug_print("");
-    debug_print("=== Committing Remaining Pending Matches ===");
-    for (conn_uid in connection_states) {
-        local state = connection_states[conn_uid];
-        if (|state$pending_matches| > 0) {
-            debug_print(fmt("Connection %s has %d pending matches", conn_uid, |state$pending_matches|));
-            for (pend_idx in state$pending_matches) {
-                local pending = state$pending_matches[pend_idx];
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║              SEQUENTIAL MATCHING (Python-compatible)                      ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# This function replicates Python's analyze_smb_commands() exactly:
+# sequential forward scan, cumulative skip counting, longest-signature-wins.
+function sequential_match_all(conn_uid: string) {
+    local state = connection_states[conn_uid];
+    local num_commands = |state$commands|;
+    local index: count = 0;
 
-                # Check if commands are still available
-                local all_available = T;
-                for (cmd_pos in pending$command_indices) {
-                    local cmd_idx = pending$command_indices[cmd_pos];
-                    if (state$commands[cmd_idx]$assigned) {
-                        all_available = F;
+    debug_print(fmt("[SEQ MATCH] Starting sequential matching for %s (%d commands)", conn_uid, num_commands));
+
+    while (index < num_commands) {
+        local cmd = state$commands[index];
+
+        # Skip already-assigned commands
+        if (cmd$assigned) {
+            ++index;
+            next;
+        }
+
+        local cmd_hash = cmd$hash;
+
+        # Check if any rules are triggered by this hash
+        if (cmd_hash in smb_rules) {
+            local rules = smb_rules[cmd_hash];
+            debug_print(fmt("[SEQ MATCH] Index %d hash %s: %d candidate rules", index, cmd_hash, |rules|));
+
+            # Track the best (longest) matching candidate
+            local best_sig_len: count = 0;
+            local has_best = F;
+            local best_matched_indices: vector of count = vector();
+            local best_rule_app = "";
+            local best_rule_desc = "";
+            local best_rule_sig: vector of string = vector();
+            local best_rule_max_skip: count = 0;
+            local best_rule_excluded: set[string] = set();
+            local best_rule_fn_hashes: set[string] = set();
+            local best_has_excluded = F;
+            local best_has_fn_hashes = F;
+            local best_skipped: count = 0;
+
+            for (rule_idx in rules) {
+                local rule = rules[rule_idx];
+
+                # Rule must start with this hash
+                if (rule$signature[0] != cmd_hash)
+                    next;
+
+                local sig_len = |rule$signature|;
+                local max_skip_val = rule$max_skip;
+                local has_excluded = rule?$excluded;
+                local excluded_set: set[string] = set();
+                if (has_excluded)
+                    excluded_set = rule$excluded;
+
+                # -- Try to match the full signature (Python-style) --
+                local skipped: count = 0;
+                local candidate_okay = T;
+                local matched_indices: vector of count = vector();
+                matched_indices[0] = index;
+
+                # Match remaining signature parts (positions 1..N)
+                local sig_pos: count = 1;
+                while (sig_pos < sig_len) {
+                    local expected_hash = rule$signature[sig_pos];
+                    local found = F;
+
+                    # Search forward with cumulative skip (mirrors Python exactly)
+                    while (skipped <= max_skip_val) {
+                        local future_idx = index + sig_pos + skipped;
+                        if (future_idx >= num_commands) {
+                            candidate_okay = F;
+                            break;
+                        }
+
+                        local future_cmd = state$commands[future_idx];
+                        local future_hash = future_cmd$hash;
+
+                        # Check excluded
+                        if (has_excluded && future_hash in excluded_set) {
+                            candidate_okay = F;
+                            break;
+                        }
+
+                        if (future_hash == expected_hash) {
+                            found = T;
+                            matched_indices[|matched_indices|] = future_idx;
+                            break;
+                        } else {
+                            ++skipped;
+                        }
+                    }
+
+                    if (!found) {
+                        candidate_okay = F;
                         break;
+                    }
+
+                    ++sig_pos;
+                }
+
+                # Check that no matched command is already assigned
+                if (candidate_okay) {
+                    for (check_pos in matched_indices) {
+                        local check_cmd_idx = matched_indices[check_pos];
+                        if (state$commands[check_cmd_idx]$assigned) {
+                            candidate_okay = F;
+                            break;
+                        }
                     }
                 }
 
-                if (all_available) {
-                    debug_print(fmt("[FINAL COMMIT] Committing pending match: %s (len %d)",
-                             pending$candidate$rule_description, pending$signature_length));
-                    commit_match(conn_uid, pending$candidate, state);
-                } else {
-                    debug_print(fmt("[FINAL COMMIT] Dropping pending match - commands already assigned"));
+                # Update best candidate (longest signature wins)
+                if (candidate_okay && sig_len > best_sig_len) {
+                    best_sig_len = sig_len;
+                    has_best = T;
+                    best_matched_indices = matched_indices;
+                    best_rule_app = rule$application;
+                    best_rule_desc = rule$description;
+                    best_rule_sig = rule$signature;
+                    best_rule_max_skip = rule$max_skip;
+                    best_has_excluded = has_excluded;
+                    if (has_excluded)
+                        best_rule_excluded = rule$excluded;
+                    best_has_fn_hashes = rule?$filename_hashes;
+                    if (rule?$filename_hashes)
+                        best_rule_fn_hashes = rule$filename_hashes;
+                    best_skipped = skipped;
                 }
             }
+
+            # Commit the best match
+            if (has_best) {
+                local cand: RuleCandidate;
+                cand$rule_application = best_rule_app;
+                cand$rule_description = best_rule_desc;
+                cand$rule_signature = best_rule_sig;
+                cand$rule_max_skip = best_rule_max_skip;
+                cand$start_index = index;
+                cand$current_signature_position = best_sig_len - 1;
+                cand$skipped_count = best_skipped;
+                cand$matched_command_indices = best_matched_indices;
+                # Explicitly handle optional fields to prevent stale values
+                # (Zeek local records persist across loop iterations)
+                if (best_has_excluded)
+                    cand$rule_excluded = best_rule_excluded;
+                else
+                    delete cand$rule_excluded;
+                if (best_has_fn_hashes)
+                    cand$rule_filename_hashes = best_rule_fn_hashes;
+                else
+                    delete cand$rule_filename_hashes;
+
+                debug_print(fmt("[SEQ MATCH] Committing: %s (sig len %d) at index %d",
+                         best_rule_desc, best_sig_len, index));
+                commit_match(conn_uid, cand, state);
+            }
         }
+
+        ++index;
+    }
+
+    debug_print(fmt("[SEQ MATCH] Finished sequential matching for %s", conn_uid));
+}
+
+event zeek_done() {
+    # Run Python-compatible sequential matching on all connections
+    debug_print("");
+    debug_print("=== Running Sequential Matching (Python-compatible) ===");
+    for (conn_uid in connection_states) {
+        sequential_match_all(conn_uid);
     }
     debug_print("============================================");
 
     debug_print("");
     debug_print("=== SMB Matching Statistics ===");
     debug_print("");
-    
+
     local total_reconstructed_commands = 0;
-    
+
     if (|rule_match_counts| == 0) {
         debug_print("No rules were matched.");
     } else {
@@ -2477,7 +2559,7 @@ event zeek_done() {
             total_reconstructed_commands += rule_match_counts[rule_key];
         }
     }
-    
+
     debug_print("");
     debug_print(fmt("Total reconstructed commands: %d", total_reconstructed_commands));
     debug_print("===============================");
